@@ -50,6 +50,86 @@ cd long-running-harness
 
 `planner`, `builder`, `evaluator`, `tdd-guide`, `code-reviewer`, `security-reviewer`, `functionality-reviewer`, `design-reviewer`, `originality-reviewer`
 
+## 推奨実行環境 — Devcontainer + `--dangerously-skip-permissions`
+
+`long-running` は Planner → Builder → Evaluator の間でファイル読み書き・テスト実行・コード変更を大量に自動実行します。
+通常モードでは各ツール呼び出しごとに権限確認ダイアログが表示され、**自動化ループが頻繁に中断されます**。
+
+これを解決するのが **Devcontainer + `--dangerously-skip-permissions`** の組み合わせです。
+
+### なぜ安全か
+
+```
+ホスト OS（Mac / Linux）
+  └── Docker コンテナ（Devcontainer）
+        └── claude --dangerously-skip-permissions
+              └── long-running ハーネス
+                    ├── ファイル操作
+                    ├── テスト実行
+                    └── git 操作
+```
+
+`--dangerously-skip-permissions` はすべての権限確認を自動承認します。
+**Devcontainer 内で実行する限り**、操作はコンテナに閉じるためホスト環境への影響がありません。
+コンテナが隔離境界として機能するため、フラグの「dangerous」は実質的に無効化されます。
+
+> **ホスト環境で `--dangerously-skip-permissions` を直接使うのは危険です。必ず Devcontainer 内で使用してください。**
+
+### セットアップ
+
+**1. `.devcontainer/devcontainer.json` を作成する**
+
+```json
+{
+  "name": "long-running-harness",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code"
+}
+```
+
+**2. Devcontainer を起動する**
+
+VS Code の場合:
+```
+Cmd+Shift+P → "Dev Containers: Reopen in Container"
+```
+
+CLI の場合:
+```bash
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . bash
+```
+
+**3. コンテナ内で Claude Code を起動する**
+
+```bash
+claude --dangerously-skip-permissions
+```
+
+**4. `/long-running` を実行する**
+
+```
+/long-running ユーザー認証機能を実装して
+```
+
+権限確認ダイアログなしに Planner → Builder → Evaluator ループが自動完走します。
+
+### なぜ long-running に特に重要か
+
+| 通常モード | Devcontainer モード |
+|---|---|
+| 各ツール呼び出しで承認待ち | 全ツール呼び出しを自動承認 |
+| Builder の TDD ループが頻繁に中断 | RED→GREEN→REFACTOR が止まらず完走 |
+| Evaluator の5並列エージェントが待機 | 並列評価がブロックされない |
+| 長時間の自動化タスクが実質不可能 | 数十 feature の連続実装が可能 |
+
+---
+
 ## 使い方
 
 Claude Code で `/long-running` と入力するだけ。
