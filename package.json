@@ -1,0 +1,7 @@
+{
+  "name": "long-running-harness",
+  "version": "1.0.0",
+  "description": "Planner → Builder → Evaluator long-running agent harness for Claude Code",
+  "keywords": ["claude-code", "skills", "tdd", "agent-harness"],
+  "license": "MIT"
+}
