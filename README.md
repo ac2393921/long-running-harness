@@ -58,10 +58,31 @@ Claude Code で `/long-running` と入力するだけ。
 /long-running ユーザー認証機能を実装して
 ```
 
-ハーネスが自動で:
-1. **Planner** が機能を分解し `features.json` を生成
-2. **Builder** が TDD（RED→GREEN→REFACTOR）で1機能ずつ実装
-3. **Evaluator** が4軸ルーブリックで品質評価。スコア不足なら Builder にフィードバックしてループ
+### フロー
+
+```mermaid
+flowchart TD
+    Start([タスク開始]) --> Planner
+
+    Planner["🗂 Planner\nissue-plan スキル\nfeatures.json 生成"]
+    Planner --> Approve{ユーザー承認}
+    Approve -->|承認| Builder
+
+    Builder["🔨 Builder\nbuild-cycle → tdd-guide\nRED → GREEN → REFACTOR"]
+    Builder --> Evaluator
+
+    Evaluator["🔍 Evaluator\nevaluate スキル\n4軸ルーブリック評価"]
+    Evaluator --> Judge{判定}
+
+    Judge -->|PASS\nスコア ≥ 4.0| Done[status: done]
+    Judge -->|NEEDS REVISION\nloop < 3| Builder
+    Judge -->|BLOCKED\nloop ≥ 3| Blocked[status: blocked\nユーザーへ通知]
+
+    Done --> Next{pending feature\n残あり?}
+    Blocked --> Next
+    Next -->|YES| Builder
+    Next -->|NO| Summary([FINAL-SUMMARY 生成])
+```
 
 ## skill-usage.json
 
