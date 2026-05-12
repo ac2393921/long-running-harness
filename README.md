@@ -84,6 +84,71 @@ flowchart TD
     Next -->|NO| Summary([FINAL-SUMMARY 生成])
 ```
 
+## 4軸ルーブリック評価
+
+Evaluator フェーズでは **5つの専門エージェントが並列実行**され、実装を多面的に評価します。
+実装エージェントのコンテキストを引き継がない新規エージェントとして起動し、自己評価の甘さ（self-leniency）を排除します。
+
+### 評価軸と担当エージェント
+
+```mermaid
+flowchart LR
+    Impl[実装コード] --> E
+
+    subgraph E[Evaluator — 5並列]
+        F["🧪 functionality-reviewer\n機能性"]
+        C["🔬 code-reviewer\n技術的実行"]
+        D["🎨 design-reviewer\nデザイン品質"]
+        O["✨ originality-reviewer\n独創性"]
+        S["🔒 security-reviewer\nセキュリティ"]
+    end
+
+    F --> R[統合サマリー]
+    C --> R
+    D --> R
+    O --> R
+    S --> R
+```
+
+| 軸 | 担当エージェント | スコア | 評価内容 |
+|---|---|---|---|
+| **機能性** | `functionality-reviewer` | 1–5 | DoD チェック・Playwright UI フロー確認 |
+| **技術的実行** | `code-reviewer` | 1–5 | テストカバレッジ・SRP/DRY・パフォーマンス |
+| **デザイン品質** | `design-reviewer` | 1–5 / N/A | 3ブレークポイントのスクリーンショット・WCAG AA準拠 |
+| **独創性** | `originality-reviewer` | 1–5 | 洗練度・工夫・ボイラープレート率 |
+| **セキュリティ** | `security-reviewer` | PASS / BLOCKED | OWASP Top 10・インジェクション・シークレット漏洩 |
+
+### 総合スコアと判定
+
+総合スコア = 4軸の算術平均（デザイン品質が N/A の場合は残り3軸で計算）
+
+| 条件 | 判定 | 次のアクション |
+|---|---|---|
+| security-reviewer で Critical 1件以上 | **BLOCKED** | ユーザーへエスカレーション |
+| loop ≥ 3 かつ未解決問題あり | **BLOCKED** | ユーザーへエスカレーション |
+| DoD 未達成 1件以上 | **NEEDS REVISION** | Builder へフィードバック、loop + 1 |
+| いずれかの軸スコア < 3 | **NEEDS REVISION** | Builder へフィードバック、loop + 1 |
+| 総合スコア < 4.0 かつ loop < 3 | **NEEDS REVISION** | Builder へフィードバック、loop + 1 |
+| すべての条件をクリア | **PASS** | status: done、次の feature へ |
+
+### 出力サマリー例
+
+```
+# Evaluation Summary
+
+**Verdict**: PASS (Loop: 1/3)
+
+| 軸           | エージェント             | スコア | 判定 |
+|---|---|---|---|
+| 機能性        | functionality-reviewer  | 5/5   | ✓   |
+| 技術的実行    | code-reviewer           | 4/5   | ✓   |
+| デザイン品質  | design-reviewer         | N/A   | -   |
+| 独創性        | originality-reviewer    | 4/5   | ✓   |
+| セキュリティ  | security-reviewer       | PASS  | ✓   |
+
+総合スコア（N/A 除く）: 4.3/5
+```
+
 ## skill-usage.json
 
 各 `tdd-cycle` フェーズの実行ログが `.claude/orchestrate/{session}/skill-usage.json` に記録されます。
