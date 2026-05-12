@@ -58,6 +58,105 @@ Claude Code で `/long-running` と入力するだけ。
 /long-running ユーザー認証機能を実装して
 ```
 
+## Planner（計画フェーズ）
+
+Planner は `issue-plan` スキルを使い、タスクを **実装可能な最小機能単位（feature）** に分解します。
+Builder が「何を・どの順に・どのテストで」実装すべきかを定義するのが唯一の責務です。
+
+### 入力
+
+| 入力形式 | 例 |
+|---|---|
+| GitHub Issue URL / 番号 | `#123`, `https://github.com/org/repo/issues/123` |
+| 自由記述 | 「Claude.ai のクローンを作って」 |
+| 引数なし | AskUserQuestion でタスクを確認する |
+
+### 6ステップのワークフロー
+
+```mermaid
+flowchart TD
+    A[入力を受け取る] --> B[コードベース調査\nGrep / Glob / Read のみ]
+    B --> C[15セクション実装計画を作成\nplan.md]
+    C --> D[features.json を生成\n1 feature = builder 1セッション分]
+    D --> E{未決定項目あり?}
+    E -->|YES| F[AskUserQuestion で確認]
+    F --> E
+    E -->|NO| G[ユーザー承認を得る]
+    G --> H[承認されたら Builder へ渡す]
+```
+
+> **制約**: Planner は Read / Grep / Glob のみ使用します。コードの変更は一切行いません。
+
+### 15セクション実装計画（plan.md）
+
+Planner が生成する `plan.md` は以下の15セクションで構成されます。
+
+| # | セクション | 内容 |
+|---|---|---|
+| 1 | Acceptance Criteria 確認 | 明記された条件・曖昧点の質問リスト |
+| 2 | スコープ定義 | In Scope / Out of Scope |
+| 3 | 調査結果 | 関連ファイル・既存パターン・影響範囲 |
+| 4 | 実装方針 | フェーズ別ステップ・影響ファイル一覧 |
+| 5 | DB スキーマ変更 | Migration SQL・ロールバック計画 |
+| 6 | API 契約・後方互換性 | 新規/変更 API・移行戦略 |
+| 7 | セキュリティ・パフォーマンス | インジェクション対策・N+1 評価 |
+| 8 | テスト戦略（t-wada式 TDD 3層） | Unit / Integration / E2E テストケース列挙 |
+| 9 | ドキュメント更新の必要性 | 更新対象ファイル・ADR |
+| 10 | デプロイ考慮事項 | ロールアウト方式・ロールバック計画 |
+| 11 | Definition of Done | 完了の定義チェックリスト |
+| 12 | リスク・注意点 | 影響度・対策 |
+| 13 | 確認事項・未決定項目 | ユーザーへの質問リスト |
+| 14 | タイムライン推定 | フェーズ別工数見積もり |
+| 15 | features.json | Builder への入力アーティファクト |
+
+### features.json — Builder への唯一の入力
+
+Planner の最終成果物。Builder は `status: "pending"` の feature を `sequence` 順に1件ずつ実装します。
+
+```json
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "title": "ユーザー登録API",
+      "description": "POST /api/users を実装し、バリデーション・DB保存・レスポンスを返す",
+      "phase": 1,
+      "acceptance_criteria": ["メールアドレスの重複を弾く", "201 Created を返す"],
+      "files": {
+        "create": ["src/api/users.py", "tests/test_users.py"],
+        "modify": ["src/db/schema.sql"]
+      },
+      "tests": {
+        "unit": [
+          { "name": "test_validate_email_rejects_duplicate", "file": "tests/test_users.py" }
+        ],
+        "integration": [
+          { "name": "test_POST_users_returns_201", "file": "tests/test_users.py" }
+        ]
+      },
+      "dependencies": [],
+      "status": "pending"
+    }
+  ]
+}
+```
+
+**feature 設計のルール**:
+
+| ルール | 理由 |
+|---|---|
+| 1 feature = builder が1セッションで実装できる量 | Context Rot（コンテキスト汚染）を防ぐ |
+| `tests` には「最初は失敗するテスト」を列挙 | TDD の RED フェーズの仕様書になる |
+| `dependencies` に先行 feature の id を記載 | Builder が正しい順序で実装できる |
+| `status` は常に `"pending"` で初期化 | Harness がランタイム状態を管理する |
+
+### ユーザー承認が必須
+
+Planner は `features.json` をチャット内にインライン表示し、ユーザーの承認を待ちます。
+**承認なしに Builder を起動しません**。未決定項目がある場合は `AskUserQuestion` で確認してから進みます。
+
+---
+
 ### フロー
 
 ```mermaid
